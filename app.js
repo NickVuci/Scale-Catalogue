@@ -28,7 +28,21 @@ function getScaleName(scale) {
     return knownScales[key] || "Unknown Scale";
 }
 
-// Event Listener for Generate Button
+// Tone.js Synth for Managing Playback
+let synth = null;
+
+/**
+ * Initialize Tone.js Synth
+ */
+function initializeSynth() {
+    if (!synth) {
+        synth = new Tone.Synth().toDestination();
+    }
+}
+
+/**
+ * Event Listener for Generate Button
+ */
 document.getElementById('generateBtn').addEventListener('click', () => {
     const edoInput = document.getElementById('edo');
     const scaleSizeInput = document.getElementById('scaleSize');
@@ -59,7 +73,9 @@ document.getElementById('generateBtn').addEventListener('click', () => {
     updatePaginationControls(totalPages);
 });
 
-// Pagination Controls Event Listeners
+/**
+ * Pagination Controls Event Listeners
+ */
 document.getElementById('prevPageBtn').addEventListener('click', () => {
     if (currentPage > 1) {
         currentPage--;
@@ -160,7 +176,6 @@ function renderPage(page, edo, scaleSize) {
         scaleDiv.addEventListener('click', () => {
             highlightScale(scale, edo);
         });
-        addPlayButton(scaleDiv, scale, edo); // Add play button
         resultsDiv.appendChild(scaleDiv);
     });
 
@@ -176,7 +191,7 @@ function renderPage(page, edo, scaleSize) {
 
 /**
  * Updates the state of pagination controls based on the current page and total pages.
- * Disables Next button if no more scales are available.
+ * Disables Next button if no more scales can be generated.
  * @param {number} total - The estimated total number of pages.
  */
 function updatePaginationControls(total) {
@@ -231,70 +246,6 @@ function regenerateGenerator(originalGenerator, generatedCount, currentPage, edo
 }
 
 /**
- * Adds a "Play" button to each scale.
- * @param {HTMLElement} scaleDiv - The div element representing the scale.
- * @param {Array<number>} scale - The scale steps.
- * @param {number} edo - The number of equal divisions of the octave.
- */
-function addPlayButton(scaleDiv, scale, edo) {
-    const playButton = document.createElement('button');
-    playButton.textContent = 'Play';
-    playButton.style.marginLeft = '10px';
-    playButton.style.padding = '5px 10px';
-    playButton.style.fontSize = '14px';
-    playButton.style.cursor = 'pointer';
-    playButton.style.border = 'none';
-    playButton.style.borderRadius = '4px';
-    playButton.style.backgroundColor = '#28a745';
-    playButton.style.color = '#fff';
-    playButton.style.transition = 'background 0.3s';
-
-    playButton.addEventListener('click', (e) => {
-        e.stopPropagation(); // Prevent triggering scale selection
-        playScale(scale, edo);
-    });
-
-    playButton.addEventListener('mouseover', () => {
-        playButton.style.backgroundColor = '#218838';
-    });
-
-    playButton.addEventListener('mouseout', () => {
-        playButton.style.backgroundColor = '#28a745';
-    });
-
-    scaleDiv.appendChild(playButton);
-}
-
-/**
- * Plays the selected scale using Tone.js.
- * @param {Array<number>} scale - The scale steps.
- * @param {number} edo - The number of equal divisions of the octave.
- */
-function playScale(scale, edo) {
-    // Ensure Tone.js is loaded
-    if (typeof Tone === 'undefined') {
-        alert('Tone.js is not loaded. Please check your script includes.');
-        return;
-    }
-
-    const synth = new Tone.Synth().toDestination();
-    let time = Tone.now();
-
-    // Starting frequency (e.g., C4 = 261.63 Hz)
-    let frequency = 261.63;
-
-    // Calculate frequency ratio based on EDO
-    const ratio = Math.pow(2, 1 / edo);
-
-    // Play each note in the scale
-    scale.forEach(step => {
-        frequency *= Math.pow(ratio, step);
-        synth.triggerAttackRelease(frequency, '8n', time);
-        time += 0.5; // Half a second between notes
-    });
-}
-
-/**
  * Highlights the selected scale on the chromatic circle.
  * @param {Array<number>} scale - The scale steps.
  * @param {number} edo - The number of equal divisions of the octave.
@@ -314,6 +265,117 @@ function highlightScale(scale, edo) {
             elem.classList.add('selected');
         }
     });
+    // Enable the centralized Play button
+    const playBtn = document.getElementById('playScaleBtn');
+    playBtn.disabled = false;
+    playBtn.dataset.scale = JSON.stringify(scale); // Store the selected scale
+}
+
+/**
+ * Centralized Play Button Event Listener
+ */
+document.getElementById('playScaleBtn').addEventListener('click', async () => {
+    const playBtn = document.getElementById('playScaleBtn');
+    const scaleData = playBtn.dataset.scale;
+    if (scaleData) {
+        const scale = JSON.parse(scaleData);
+        const edo = parseInt(document.getElementById('edo').value);
+
+        // Ensure Tone.js is ready (user interaction required for AudioContext)
+        await Tone.start();
+
+        playScale(scale, edo);
+    }
+});
+
+/**
+ * Plays the selected scale using Tone.js.
+ * Ensures that only one scale plays at a time.
+ * Plays the root and the octave higher.
+ * Adds visual feedback by making corresponding notes glow.
+ * @param {Array<number>} scale - The scale steps.
+ * @param {number} edo - The number of equal divisions of the octave.
+ */
+function playScale(scale, edo) {
+    // Initialize Synth if not already
+    initializeSynth();
+
+    // Stop any ongoing playback
+    Tone.Transport.stop();
+    Tone.Transport.cancel(); // Remove all scheduled events
+
+    // Start the Transport
+    Tone.Transport.start();
+
+    // Calculate the step frequencies
+    let frequency = 261.63; // Starting frequency (C4)
+    const ratio = Math.pow(2, 1 / edo);
+
+    // Schedule the root note first
+    synth.triggerAttackRelease(frequency, '8n', Tone.now());
+    scheduleGlow(0, Tone.now(), 'start'); // Root is step 0
+    scheduleGlow(0, Tone.now() + 0.5, 'end');
+
+    let time = Tone.now() + 0.5; // Increment time after the root note
+
+    // Iterate over the steps
+    scale.forEach(step => {
+        frequency *= Math.pow(ratio, step);
+        synth.triggerAttackRelease(frequency, '8n', time);
+
+        // Calculate which step is being played
+        const currentStep = frequencyToStep(frequency, edo);
+
+        // Add visual feedback
+        scheduleGlow(currentStep, time, 'start');
+        scheduleGlow(currentStep, time + 0.5, 'end');
+
+        time += 0.5; // Half a second between notes
+    });
+
+    // No need to play octave higher separately since steps sum to octave
+
+    // Update Play button state during playback
+    const playBtn = document.getElementById('playScaleBtn');
+    playBtn.textContent = 'Playing...';
+    playBtn.disabled = true;
+
+    // Calculate total playback time
+    const totalTime = time - Tone.now(); // Duration in seconds
+
+    // Re-enable the Play button after playback
+    setTimeout(() => {
+        playBtn.textContent = 'Play Selected Scale';
+        playBtn.disabled = false;
+    }, totalTime * 1000);
+}
+
+/**
+ * Converts frequency to step number based on EDO.
+ * @param {number} frequency - The frequency of the note.
+ * @param {number} edo - The number of equal divisions of the octave.
+ * @returns {number} - The corresponding step number.
+ */
+function frequencyToStep(frequency, edo) {
+    const step = Math.round(Math.log2(frequency / 261.63) * edo);
+    return step % edo;
+}
+
+/**
+ * Schedules a glow effect on the chromatic circle.
+ * @param {number} step - The step number corresponding to the note.
+ * @param {number} time - The time at which to trigger the glow.
+ * @param {string} action - 'start' to add glow, 'end' to remove glow.
+ */
+function scheduleGlow(step, time, action) {
+    Tone.Transport.schedule((timeStamp) => {
+        const circle = d3.select(`#chromaticCircle circle[data-step='${step}']`);
+        if (action === 'start') {
+            circle.classed('glow', true);
+        } else if (action === 'end') {
+            circle.classed('glow', false);
+        }
+    }, time);
 }
 
 /**
@@ -361,7 +423,7 @@ function drawChromaticCircle(scale, edo) {
             .attr('y', (radius + 20) * Math.sin(currentAngle) + 5) // +5 to center vertically
             .attr('text-anchor', 'middle')
             .attr('font-size', '12px')
-            .text(i + 1);
+            .text(i === 0 ? 'Root' : i); // Label root explicitly
     }
 
     // Draw scale notes
@@ -381,6 +443,7 @@ function drawChromaticCircle(scale, edo) {
             .attr('fill', '#007BFF')
             .attr('stroke', '#fff')
             .attr('stroke-width', 2)
+            .attr('data-step', currentStep) // Assign data-step
             .on('mouseover', function() {
                 d3.select(this)
                     .transition()

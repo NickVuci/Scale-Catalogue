@@ -120,6 +120,28 @@ button:hover {
     border-radius: 50%;
 }
 
+/* Centralized Play Button Styling */
+#playScaleBtn {
+    margin-top: 20px;
+    padding: 10px 20px;
+    background: #28a745;
+    color: #fff;
+    border: none;
+    cursor: pointer;
+    font-size: 16px;
+    border-radius: 4px;
+    transition: background 0.3s;
+}
+
+#playScaleBtn:hover:not(:disabled) {
+    background: #218838;
+}
+
+#playScaleBtn:disabled {
+    background: #94d3a2;
+    cursor: not-allowed;
+}
+
 /* Pagination Controls Styling */
 #paginationControls {
     display: flex;
@@ -153,6 +175,14 @@ button:hover {
 #currentPage {
     font-size: 14px;
     font-weight: bold;
+}
+
+/* Glow Effect Styling */
+.glow {
+    stroke: #FFD700; /* Gold color for the glow */
+    stroke-width: 4px;
+    filter: drop-shadow(0 0 10px #FFD700);
+    transition: all 0.3s ease;
 }
 
 /* Responsive Design */

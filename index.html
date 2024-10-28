@@ -8,6 +8,8 @@
     <link rel="stylesheet" href="styles.css">
     <!-- Include D3.js -->
     <script src="https://d3js.org/d3.v7.min.js"></script>
+    <!-- Include Tone.js -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.35/Tone.min.js"></script>
 </head>
 <body>
     <div class="container">
@@ -28,7 +30,7 @@
             <!-- Pagination Controls -->
             <div id="paginationControls">
                 <button id="prevPageBtn" disabled>Previous</button>
-                <span id="currentPage">Page 1 of 1</span>
+                <span id="currentPage">Page 1</span>
                 <button id="nextPageBtn" disabled>Next</button>
             </div>
         </div>
@@ -36,11 +38,11 @@
             <div id="visualization">
                 <h2>Chromatic Circle Visualization</h2>
                 <svg id="chromaticCircle" width="500" height="500"></svg>
+                <!-- Centralized Play Button -->
+                <button id="playScaleBtn" disabled>Play Selected Scale</button>
             </div>
         </div>
     </div>
     <script src="app.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.35/Tone.min.js"></script>
-
 </body>
 </html>
