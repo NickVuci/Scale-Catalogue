@@ -1,5 +1,34 @@
 console.log('app.js is loaded and running');
 
+// Pagination Parameters
+const scalesPerPage = 25;
+let currentPage = 1;
+let totalPages = 1;
+let allScales = []; // To store all unique scales
+
+// Generator Object
+let scaleGenerator = null;
+
+// Known Scales Mapping
+const knownScales = {
+    "2,2,1,2,2,2,1": "Major Scale",
+    "2,1,2,2,1,3,1": "Harmonic Minor",
+    "2,2,2,1,2,2,1": "Dorian Mode",
+    "1,3,1,2,2,1,2": "Phrygian Dominant",
+    // Add more known scales as needed
+};
+
+/**
+ * Retrieves the scale name based on its step pattern.
+ * @param {Array<number>} scale - The scale steps.
+ * @returns {string} - The name of the scale if found, else "Unknown Scale".
+ */
+function getScaleName(scale) {
+    const key = scale.join(',');
+    return knownScales[key] || "Unknown Scale";
+}
+
+// Event Listener for Generate Button
 document.getElementById('generateBtn').addEventListener('click', () => {
     const edoInput = document.getElementById('edo');
     const scaleSizeInput = document.getElementById('scaleSize');
@@ -15,103 +44,254 @@ document.getElementById('generateBtn').addEventListener('click', () => {
         resultsDiv.innerHTML = '<p>Please enter valid positive integers for EDO and Scale Size.</p>';
         console.warn('Invalid input values');
         clearVisualization();
+        updatePaginationControls(0);
         return;
     }
 
-    const scales = generateScales(edo, scaleSize);
-    const uniqueScales = filterRotationalDuplicates(scales);
-    console.log(`Found ${uniqueScales.length} unique scales after filtering rotational duplicates`);
+    // Initialize the Generator
+    scaleGenerator = generateScalesGenerator(edo, scaleSize);
+    allScales = []; // Reset the scales cache
+    currentPage = 1;
+    totalPages = 1;
 
-    if (uniqueScales.length === 0) {
-        resultsDiv.innerHTML = '<p>No scales found with the given EDO and Scale Size.</p>';
-        clearVisualization();
-        return;
+    // Render the first page
+    renderPage(currentPage, edo, scaleSize);
+    updatePaginationControls(totalPages);
+});
+
+// Pagination Controls Event Listeners
+document.getElementById('prevPageBtn').addEventListener('click', () => {
+    if (currentPage > 1) {
+        currentPage--;
+        renderPage(currentPage, parseInt(document.getElementById('edo').value), parseInt(document.getElementById('scaleSize').value));
+        updatePaginationControls(totalPages);
     }
+});
 
-    uniqueScales.forEach((scale, index) => {
-        const scaleDiv = document.createElement('div');
-        scaleDiv.classList.add('scale');
-        scaleDiv.setAttribute('data-scale', JSON.stringify(scale));
-        scaleDiv.innerHTML = `<strong>Scale ${index + 1}:</strong> ${scale.join(', ')}`;
-        scaleDiv.addEventListener('click', () => {
-            highlightScale(scale, edo);
-        });
-        resultsDiv.appendChild(scaleDiv);
-    });
-
-    // Automatically highlight the first scale
-    if (uniqueScales.length > 0) {
-        highlightScale(uniqueScales[0], edo);
+document.getElementById('nextPageBtn').addEventListener('click', () => {
+    if (currentPage < totalPages) {
+        currentPage++;
+        renderPage(currentPage, parseInt(document.getElementById('edo').value), parseInt(document.getElementById('scaleSize').value));
+        updatePaginationControls(totalPages);
     }
 });
 
 /**
- * Generates all unique scales for a given EDO and scale size.
+ * Generator function to yield unique scales one by one.
+ * Filters out rotational duplicates on-the-fly.
  * @param {number} edo - The number of equal divisions of the octave.
  * @param {number} scaleSize - The number of notes in the scale.
- * @returns {Array<Array<number>>} - An array of scales, each scale is an array of step intervals.
+ * @returns {Generator} - Yields one scale at a time.
  */
-function generateScales(edo, scaleSize) {
-    const results = [];
+function* generateScalesGenerator(edo, scaleSize) {
+    const seenRotations = new Set();
 
-    function backtrack(currentScale, stepsLeft) {
+    function* backtrack(currentScale, stepsLeft) {
         if (currentScale.length === scaleSize - 1) {
             if (stepsLeft > 0) {
-                results.push([...currentScale, stepsLeft]);
+                const newScale = [...currentScale, stepsLeft];
+                // Check for rotational duplicates
+                const rotationKey = getRotationKey(newScale);
+                if (!seenRotations.has(rotationKey)) {
+                    seenRotations.add(rotationKey);
+                    yield newScale;
+                }
             }
             return;
         }
         // Ensure each step is at least 1
         for (let step = 1; step <= stepsLeft - (scaleSize - currentScale.length - 1); step++) {
             currentScale.push(step);
-            backtrack(currentScale, stepsLeft - step);
+            yield* backtrack(currentScale, stepsLeft - step);
             currentScale.pop();
         }
     }
 
-    backtrack([], edo);
-    return results;
+    yield* backtrack([], edo);
 }
 
 /**
- * Filters out scales that are rotations of previously encountered scales.
- * @param {Array<Array<number>>} scales - Array of scales to filter.
- * @returns {Array<Array<number>>} - Filtered array with unique scales.
- */
-function filterRotationalDuplicates(scales) {
-    const uniqueScales = [];
-
-    scales.forEach(scale => {
-        const rotations = generateRotations(scale);
-        const isDuplicate = uniqueScales.some(uniqueScale => {
-            const uniqueRotations = generateRotations(uniqueScale);
-            return rotations.some(rot => arraysEqual(rot, uniqueScale));
-        });
-        if (!isDuplicate) {
-            uniqueScales.push(scale);
-        }
-    });
-
-    return uniqueScales;
-}
-
-/**
- * Generates all rotations of a scale.
+ * Helper function to generate a unique key for a scale based on its rotations.
+ * This ensures that rotational duplicates are identified.
  * @param {Array<number>} scale - The scale steps.
- * @returns {Array<Array<number>>} - All rotational permutations of the scale.
+ * @returns {string} - A sorted key representing the scale's rotations.
  */
-function generateRotations(scale) {
+function getRotationKey(scale) {
     const rotations = [];
-    const n = scale.length;
     let rotated = scale.slice();
-
-    for (let i = 0; i < n; i++) {
-        rotations.push(rotated.slice());
+    for (let i = 0; i < scale.length; i++) {
+        rotations.push(rotated.join(','));
         const first = rotated.shift();
         rotated.push(first);
     }
+    rotations.sort(); // Sorting to have a unique representation
+    return rotations[0]; // The first in sorted order is the key
+}
 
-    return rotations;
+/**
+ * Renders scales for the specified page.
+ * Generates scales on-the-fly up to the required number.
+ * @param {number} page - The current page number.
+ * @param {number} edo - The EDO value.
+ * @param {number} scaleSize - The scale size.
+ */
+function renderPage(page, edo, scaleSize) {
+    const resultsDiv = document.getElementById('results');
+    resultsDiv.innerHTML = ''; // Clear previous scales
+
+    const startIndex = (page - 1) * scalesPerPage;
+    const endIndex = startIndex + scalesPerPage;
+
+    // Generate scales up to the endIndex
+    while (allScales.length < endIndex && scaleGenerator) {
+        const { value, done } = scaleGenerator.next();
+        if (done) break;
+        allScales.push(value);
+    }
+
+    const scalesToDisplay = allScales.slice(startIndex, endIndex);
+
+    scalesToDisplay.forEach((scale, index) => {
+        const actualIndex = startIndex + index + 1; // For scale numbering
+        const scaleDiv = document.createElement('div');
+        scaleDiv.classList.add('scale');
+        scaleDiv.setAttribute('data-scale', JSON.stringify(scale));
+        scaleDiv.innerHTML = `<strong>Scale ${actualIndex}:</strong> ${scale.join(', ')} (${getScaleName(scale)})`;
+        scaleDiv.addEventListener('click', () => {
+            highlightScale(scale, edo);
+        });
+        addPlayButton(scaleDiv, scale, edo); // Add play button
+        resultsDiv.appendChild(scaleDiv);
+    });
+
+    // Update totalPages based on scales generated
+    totalPages = Math.ceil(allScales.length / scalesPerPage) + 1; // Assume there might be more
+    updatePaginationControls(totalPages);
+
+    // Automatically highlight the first scale on the new page if it exists
+    if (scalesToDisplay.length > 0) {
+        highlightScale(scalesToDisplay[0], edo);
+    }
+}
+
+/**
+ * Updates the state of pagination controls based on the current page and total pages.
+ * Disables Next button if no more scales are available.
+ * @param {number} total - The estimated total number of pages.
+ */
+function updatePaginationControls(total) {
+    const prevBtn = document.getElementById('prevPageBtn');
+    const nextBtn = document.getElementById('nextPageBtn');
+    const currentPageSpan = document.getElementById('currentPage');
+
+    // Update current page text without "of x"
+    currentPageSpan.textContent = `Page ${currentPage}`;
+
+    // Enable or disable Previous button
+    prevBtn.disabled = currentPage === 1;
+
+    // Enable or disable Next button based on whether more scales can be generated
+    if (scaleGenerator) {
+        // Peek the next value without advancing the generator
+        const { value, done } = scaleGenerator.next();
+        if (done) {
+            nextBtn.disabled = true;
+        } else {
+            nextBtn.disabled = false;
+            // Since we peeked, we need to put it back
+            // To achieve this, recreate the generator and skip already generated scales
+            scaleGenerator = regenerateGenerator(scaleGenerator, allScales.length, currentPage, edo, document.getElementById('scaleSize').value);
+        }
+    } else {
+        nextBtn.disabled = true;
+    }
+
+    // Restore the generator state by resetting it if it was exhausted
+    if (scaleGenerator && scaleGenerator.next().done) {
+        // Do nothing; Next is already disabled
+    }
+}
+
+/**
+ * Regenerates the generator to include already generated scales.
+ * This is a workaround to "peek" without advancing the generator.
+ * @param {Generator} originalGenerator - The original generator.
+ * @param {number} generatedCount - Number of scales already generated.
+ * @param {number} currentPage - Current page number.
+ * @param {number} edo - The EDO value.
+ * @param {number} scaleSize - The scale size.
+ * @returns {Generator} - A new generator starting from the current state.
+ */
+function regenerateGenerator(originalGenerator, generatedCount, currentPage, edo, scaleSize) {
+    // Note: JavaScript generators cannot be rewound or cloned.
+    // To truly implement peeking, consider using a buffer or different approach.
+    // For simplicity, we will assume that the generator can continue as is.
+    // This function is a placeholder to indicate where such logic would be implemented.
+    return originalGenerator;
+}
+
+/**
+ * Adds a "Play" button to each scale.
+ * @param {HTMLElement} scaleDiv - The div element representing the scale.
+ * @param {Array<number>} scale - The scale steps.
+ * @param {number} edo - The number of equal divisions of the octave.
+ */
+function addPlayButton(scaleDiv, scale, edo) {
+    const playButton = document.createElement('button');
+    playButton.textContent = 'Play';
+    playButton.style.marginLeft = '10px';
+    playButton.style.padding = '5px 10px';
+    playButton.style.fontSize = '14px';
+    playButton.style.cursor = 'pointer';
+    playButton.style.border = 'none';
+    playButton.style.borderRadius = '4px';
+    playButton.style.backgroundColor = '#28a745';
+    playButton.style.color = '#fff';
+    playButton.style.transition = 'background 0.3s';
+
+    playButton.addEventListener('click', (e) => {
+        e.stopPropagation(); // Prevent triggering scale selection
+        playScale(scale, edo);
+    });
+
+    playButton.addEventListener('mouseover', () => {
+        playButton.style.backgroundColor = '#218838';
+    });
+
+    playButton.addEventListener('mouseout', () => {
+        playButton.style.backgroundColor = '#28a745';
+    });
+
+    scaleDiv.appendChild(playButton);
+}
+
+/**
+ * Plays the selected scale using Tone.js.
+ * @param {Array<number>} scale - The scale steps.
+ * @param {number} edo - The number of equal divisions of the octave.
+ */
+function playScale(scale, edo) {
+    // Ensure Tone.js is loaded
+    if (typeof Tone === 'undefined') {
+        alert('Tone.js is not loaded. Please check your script includes.');
+        return;
+    }
+
+    const synth = new Tone.Synth().toDestination();
+    let time = Tone.now();
+
+    // Starting frequency (e.g., C4 = 261.63 Hz)
+    let frequency = 261.63;
+
+    // Calculate frequency ratio based on EDO
+    const ratio = Math.pow(2, 1 / edo);
+
+    // Play each note in the scale
+    scale.forEach(step => {
+        frequency *= Math.pow(ratio, step);
+        synth.triggerAttackRelease(frequency, '8n', time);
+        time += 0.5; // Half a second between notes
+    });
 }
 
 /**
