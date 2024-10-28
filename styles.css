@@ -11,6 +11,27 @@ body {
     min-height: 100vh;
 }
 
+/* Header Styling */
+header {
+    background-color: #007BFF; /* Blue background for header */
+    color: #fff; /* White text color */
+    padding: 20px 0; /* Vertical padding */
+    text-align: center; /* Center the text */
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1); /* Subtle shadow for depth */
+}
+
+header h1 {
+    font-size: 2.5em; /* Large font size for main title */
+    margin-bottom: 10px; /* Space below the title */
+}
+
+header h2 {
+    font-size: 1.5em; /* Slightly smaller font for subtitle */
+    font-weight: normal; /* Normal font weight */
+    color: #e0e0e0; /* Light gray color for subtitle */
+}
+
+/* Main Container: Two Columns */
 .container {
     display: flex;
     flex-direction: row;
@@ -39,8 +60,7 @@ body {
 }
 
 h1, h2 {
-    text-align: center;
-    margin-bottom: 20px;
+    /* Removed from here as they are now in the header */
 }
 
 .input-group {
@@ -202,5 +222,14 @@ button:hover {
 
     #paginationControls {
         flex-wrap: wrap;
+    }
+
+    /* Adjust header font sizes for smaller screens */
+    header h1 {
+        font-size: 2em;
+    }
+
+    header h2 {
+        font-size: 1.2em;
     }
 }
