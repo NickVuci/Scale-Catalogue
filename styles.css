@@ -59,9 +59,6 @@ header h2 {
     align-items: center;
 }
 
-h1, h2 {
-    /* Removed from here as they are now in the header */
-}
 
 .input-group {
     margin-bottom: 20px;
